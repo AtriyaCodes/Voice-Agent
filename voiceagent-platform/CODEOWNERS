@@ -1,0 +1,10 @@
+# Default owner for anything not matched below
+*                               @AtriyaCodes
+
+services/telephony-gateway/    @AtriyaCodes
+services/voice-pipeline/       @AtriyaCodes
+services/agent-core/           @AtriyaCodes
+services/orchestration-api/    @AtriyaCodes
+services/admin-dashboard/      @AtriyaCodes
+compliance/                    @AtriyaCodes
+docs/adr/                      @AtriyaCodes

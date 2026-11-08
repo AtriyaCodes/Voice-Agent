@@ -1,0 +1,65 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: orchestration-api
+  namespace: voiceagent
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: orchestration-api
+  template:
+    metadata:
+      labels:
+        app: orchestration-api
+    spec:
+      containers:
+        - name: orchestration-api
+          image: voiceagent/orchestration-api:latest
+          ports:
+            - containerPort: 8080
+          envFrom:
+            - secretRef:
+                name: voiceagent-secrets
+          resources:
+            requests:
+              cpu: "250m"
+              memory: "256Mi"
+            limits:
+              cpu: "500m"
+              memory: "512Mi"
+          readinessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            httpGet:
+              path: /healthz
+              port: 8080
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: orchestration-api
+  namespace: voiceagent
+spec:
+  selector:
+    app: orchestration-api
+  ports:
+    - port: 8080
+      targetPort: 8080
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: orchestration-api
+  namespace: voiceagent
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: orchestration-api

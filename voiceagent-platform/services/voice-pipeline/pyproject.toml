@@ -1,0 +1,27 @@
+[project]
+name = "voice-pipeline"
+version = "0.1.0"
+description = "Streaming STT, TTS, VAD, and turn taking for VoiceAgent"
+requires-python = ">=3.12"
+dependencies = [
+    "grpcio>=1.63",
+    "grpcio-tools>=1.63",
+    "numpy>=1.26",
+    "structlog>=24.1",
+    "python-dotenv>=1.0",
+]
+
+[project.optional-dependencies]
+dev = [
+    "pytest>=8.0",
+    "pytest-asyncio>=0.23",
+    "pytest-cov>=5.0",
+    "ruff>=0.5",
+]
+
+[tool.ruff]
+line-length = 100
+
+[build-system]
+requires = ["setuptools>=68", "wheel"]
+build-backend = "setuptools.build_meta"

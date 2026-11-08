@@ -1,0 +1,92 @@
+version: "3.9"
+
+services:
+  asterisk:
+    image: andrius/asterisk:18-alpine
+    ports:
+      - "5060:5060/udp"
+      - "8088:8088"
+      - "10000-10100:10000-10100/udp"
+    volumes:
+      - ./infra/docker/asterisk/conf:/etc/asterisk
+    networks:
+      - voiceagent
+
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+    networks:
+      - voiceagent
+
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_USER: voiceagent
+      POSTGRES_PASSWORD: voiceagent
+      POSTGRES_DB: voiceagent
+    ports:
+      - "5432:5432"
+    volumes:
+      - voiceagent-postgres-data:/var/lib/postgresql/data
+    networks:
+      - voiceagent
+
+  telephony-gateway:
+    build: ./services/telephony-gateway
+    env_file: .env
+    depends_on:
+      - asterisk
+    ports:
+      - "50053:50053"
+    networks:
+      - voiceagent
+
+  voice-pipeline:
+    build: ./services/voice-pipeline
+    env_file: .env
+    ports:
+      - "50051:50051"
+    networks:
+      - voiceagent
+
+  agent-core:
+    build: ./services/agent-core
+    env_file: .env
+    depends_on:
+      - redis
+    ports:
+      - "50052:50052"
+    networks:
+      - voiceagent
+
+  orchestration-api:
+    build: ./services/orchestration-api
+    env_file: .env
+    depends_on:
+      - postgres
+      - redis
+      - agent-core
+      - voice-pipeline
+      - telephony-gateway
+    ports:
+      - "8080:8080"
+    networks:
+      - voiceagent
+
+  admin-dashboard:
+    build: ./services/admin-dashboard
+    env_file: .env
+    depends_on:
+      - orchestration-api
+    ports:
+      - "3000:3000"
+    networks:
+      - voiceagent
+
+networks:
+  voiceagent:
+    driver: bridge
+
+volumes:
+  voiceagent-postgres-data:

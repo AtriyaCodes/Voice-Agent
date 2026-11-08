@@ -1,0 +1,60 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: voice-pipeline
+  namespace: voiceagent
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: voice-pipeline
+  template:
+    metadata:
+      labels:
+        app: voice-pipeline
+    spec:
+      containers:
+        - name: voice-pipeline
+          image: voiceagent/voice-pipeline:latest
+          ports:
+            - containerPort: 50051
+          resources:
+            requests:
+              cpu: "1"
+              memory: "2Gi"
+            limits:
+              cpu: "2"
+              memory: "4Gi"
+          readinessProbe:
+            tcpSocket:
+              port: 50051
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 50051
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: voice-pipeline
+  namespace: voiceagent
+spec:
+  selector:
+    app: voice-pipeline
+  ports:
+    - port: 50051
+      targetPort: 50051
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: voice-pipeline
+  namespace: voiceagent
+spec:
+  minAvailable: 2
+  selector:
+    matchLabels:
+      app: voice-pipeline

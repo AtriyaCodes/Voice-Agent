@@ -1,0 +1,108 @@
+# SIP/RTP networking model — see docs/adr/0007 for the full trade-off
+# analysis. Summary: UDP media (SIP signaling on 5060, RTP on
+# 10000-10100) cannot be fronted by an ordinary ClusterIP/NodePort
+# Service the way the gRPC control port is — kube-proxy load-balances
+# per new connection, which would scatter one call's RTP packets across
+# different backend pods mid-call. This manifest uses `hostPort` (each
+# pod claims its ports directly on the node it lands on) plus pod
+# anti-affinity (one telephony-gateway pod per node, since only one
+# process on a node can bind 5060/udp), which works in vanilla
+# Kubernetes with no extra infrastructure. The consequence: scaling
+# capacity here means adding *nodes*, not just pods-per-node — a real
+# constraint of UDP media handling, not a shortcut taken for this repo.
+# At higher scale, the documented upgrade path is a dedicated RTP
+# relay/SBC (e.g. RTPengine, Kamailio) in front, so telephony-gateway
+# pods go back to being ordinary internally-addressed pods.
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: telephony-gateway
+  namespace: voiceagent
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: telephony-gateway
+  template:
+    metadata:
+      labels:
+        app: telephony-gateway
+    spec:
+      affinity:
+        podAntiAffinity:
+          requiredDuringSchedulingIgnoredDuringExecution:
+            - labelSelector:
+                matchLabels:
+                  app: telephony-gateway
+              topologyKey: kubernetes.io/hostname
+      containers:
+        - name: telephony-gateway
+          image: voiceagent/telephony-gateway:latest
+          ports:
+            - name: grpc
+              containerPort: 50053
+            - name: sip
+              containerPort: 5060
+              protocol: UDP
+              hostPort: 5060
+            # RTP range is intentionally narrow (10 concurrent call slots
+            # per pod/node) rather than the full 10000-10100 dev range —
+            # each port needs its own hostPort entry in vanilla k8s, and
+            # capacity comes from node count, not a wider single-pod
+            # range (see docs/adr/0007). A real deployment would
+            # generate this block from a Helm/Kustomize template rather
+            # than hand-listing every port.
+            - {name: rtp-10000, containerPort: 10000, protocol: UDP, hostPort: 10000}
+            - {name: rtp-10001, containerPort: 10001, protocol: UDP, hostPort: 10001}
+            - {name: rtp-10002, containerPort: 10002, protocol: UDP, hostPort: 10002}
+            - {name: rtp-10003, containerPort: 10003, protocol: UDP, hostPort: 10003}
+            - {name: rtp-10004, containerPort: 10004, protocol: UDP, hostPort: 10004}
+            - {name: rtp-10005, containerPort: 10005, protocol: UDP, hostPort: 10005}
+            - {name: rtp-10006, containerPort: 10006, protocol: UDP, hostPort: 10006}
+            - {name: rtp-10007, containerPort: 10007, protocol: UDP, hostPort: 10007}
+            - {name: rtp-10008, containerPort: 10008, protocol: UDP, hostPort: 10008}
+            - {name: rtp-10009, containerPort: 10009, protocol: UDP, hostPort: 10009}
+          envFrom:
+            - secretRef:
+                name: voiceagent-secrets
+          resources:
+            requests:
+              cpu: "500m"
+              memory: "512Mi"
+            limits:
+              cpu: "1"
+              memory: "1Gi"
+          readinessProbe:
+            tcpSocket:
+              port: 50053
+            initialDelaySeconds: 5
+            periodSeconds: 10
+          livenessProbe:
+            tcpSocket:
+              port: 50053
+            initialDelaySeconds: 15
+            periodSeconds: 20
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: telephony-gateway
+  namespace: voiceagent
+spec:
+  selector:
+    app: telephony-gateway
+  ports:
+    - name: grpc
+      port: 50053
+      targetPort: 50053
+---
+apiVersion: policy/v1
+kind: PodDisruptionBudget
+metadata:
+  name: telephony-gateway
+  namespace: voiceagent
+spec:
+  minAvailable: 1
+  selector:
+    matchLabels:
+      app: telephony-gateway
